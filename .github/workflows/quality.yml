@@ -1,0 +1,104 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore --locked-mode
+      - run: dotnet build --configuration Release --no-restore
+      - name: TUnit unit tests
+        run: dotnet test --project tests/GroceryHelper.UnitTests --configuration Release --no-build -- --minimum-expected-tests 1 --report-trx --results-directory TestResults/unit
+      - name: TUnit integration tests
+        run: dotnet test --project tests/GroceryHelper.IntegrationTests --configuration Release --no-build -- --minimum-expected-tests 1 --report-trx --results-directory TestResults/integration
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: backend-test-results
+          path: '**/TestResults/**'
+          retention-days: 7
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: src/GroceryHelper.Web
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: src/GroceryHelper.Web/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+
+  browser:
+    name: Browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: src/GroceryHelper.Web/package-lock.json
+      - run: dotnet restore --locked-mode
+      - run: dotnet build src/GroceryHelper.Api --configuration Release --no-restore
+      - run: npm ci
+        working-directory: src/GroceryHelper.Web
+      - run: npx playwright install --with-deps chromium
+        working-directory: src/GroceryHelper.Web
+      - run: npm run test:e2e
+        working-directory: src/GroceryHelper.Web
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: playwright-results
+          path: |
+            src/GroceryHelper.Web/playwright-report/
+            src/GroceryHelper.Web/test-results/
+          retention-days: 7
+
+  quality-gate:
+    name: Quality gate
+    if: always()
+    needs: [backend, frontend, browser]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require all checks to succeed
+        env:
+          BACKEND: ${{ needs.backend.result }}
+          FRONTEND: ${{ needs.frontend.result }}
+          BROWSER: ${{ needs.browser.result }}
+        run: |
+          test "$BACKEND" = success
+          test "$FRONTEND" = success
+          test "$BROWSER" = success
