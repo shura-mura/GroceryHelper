@@ -1,7 +1,7 @@
 ## Development workflow
 
 Before implementing or reviewing changes, read `CONTRIBUTING.md` for TDD,
-test isolation, required checks, and the manual approval and merge policy.
+test isolation, required checks, and the PR lifecycle and merge policy.
 
 ## Agent skills
 

@@ -9,12 +9,14 @@ real backend. Authentication and grocery features are not implemented yet.
 
 ## Prerequisites
 
-- .NET SDK **10.0.402** (`global.json`; preview SDKs do not satisfy this pin).
+- Latest stable **.NET 10 SDK** (`global.json` selects the latest installed
+  10.0 feature band/patch; preview SDKs and .NET 11 are excluded).
 - Node.js **22.23.3**, including npm **10.9.9** (`.node-version`, `package.json`).
 - Git. No database, Docker, or external service is required.
 
-Ensure `dotnet --version`, `node --version`, and `npm --version` report these
-versions. If using a user-local .NET installation, add its directory to `PATH`
+Check `dotnet --version`, `node --version`, and `npm --version` against these
+requirements. CI installs the latest `10.0.x` SDK; update your local .NET SDK
+to follow that channel. If using a user-local .NET installation, add its directory to `PATH`
 and set `DOTNET_ROOT` to that directory before running commands.
 
 ## Install
@@ -109,6 +111,9 @@ starting with authentication.
 
 GitHub Actions builds the backend, runs both TUnit suites, checks and builds the
 frontend, and runs Playwright. `Quality gate` succeeds only if all jobs succeed.
-Changes reach `main` only after manual GitHub approval and a separate explicit
-merge instruction. The sole-account self-approval constraint is recorded in
-[repository protections](docs/development/repository-protections.md).
+The maintainer closes the PR without merging and explicitly confirms it is
+approved. Codex then reopens it, verifies required checks, merges it, closes the
+linked issue, and safely deletes the source branch. A GitHub approving review is
+not required. See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete procedure
+and [repository protections](docs/development/repository-protections.md) for
+GitHub enforcement.

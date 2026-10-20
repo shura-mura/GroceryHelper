@@ -16,20 +16,32 @@
 6. Open a PR using the template. Record actual red/green evidence, design choices,
    limitations, and the issue it closes. Do not invent evidence for setup files
    that have no behavior to test.
-7. Merge only after the maintainer's manual GitHub approval, passing required
-   checks, and a separate explicit instruction to merge. Never auto-merge.
+7. Wait for both signals: the maintainer closes the PR without merging, and
+   explicitly confirms that the PR is approved. Check the PR's closed state;
+   a GitHub approving review is not required. Closure alone is not approval.
+8. Once both signals are present, reopen the same PR, mark it ready if necessary,
+   and verify required checks and repository rules for the current head. Merge
+   through the PR. The maintainer's explicit approval authorizes this sequence;
+   no additional merge confirmation is needed. Never enable automatic merging.
+9. Verify that GitHub reports the PR as merged before closing the linked issue
+   as completed (if GitHub has not already closed it). Then delete the PR's
+   source branch on GitHub. Delete the local source branch only after switching
+   to updated `main` and confirming no uncommitted or unmerged work would be lost.
+
+Approval applies to the reviewed changes. If changes are added after approval,
+obtain approval for the updated PR before merging. Do not close the PR yourself
+to manufacture the maintainer's closure signal. A PR already marked merged
+needs only completion verification and safe cleanup, not another merge.
 
 `Quality gate` requires backend build/tests, frontend type checking/lint/build,
 and Playwright to succeed. Keep its name stable: repository rules refer to it.
 The bootstrap commit was the sole direct-to-main exception.
 
-## Review account constraint
+## Review accounts
 
-GitHub will not let the PR author approve their own PR. The currently configured
-automation identity and maintainer are both `shura-mura`. Keep PRs in draft until
-the maintainer establishes a distinct PR-author or reviewer account with the
-necessary repository access. Do not bypass or weaken required approval to work
-around this. See [repository protections](docs/development/repository-protections.md).
+The author and maintainer may use the same GitHub account. A separate reviewer
+account is not required, and PRs need not remain draft for that reason.
+See [repository protections](docs/development/repository-protections.md).
 
 ## Design and code standards
 
@@ -47,6 +59,9 @@ around this. See [repository protections](docs/development/repository-protection
 
 ## Tests and isolation
 
+- Every backend unit and integration test must have explicit `// Arrange`,
+  `// Act`, and `// Assert` sections, in that order. Put setup, the behavior
+  under test, and outcome checks in their respective sections.
 - **TUnit unit:** business rules through public interfaces, without HTTP. The
   initial runtime smoke test validates harness execution only; it is not domain
   coverage. Add meaningful tests as domain behavior is introduced.
@@ -70,4 +85,9 @@ around this. See [repository protections](docs/development/repository-protection
 Tool versions live in `global.json`, `.node-version`, and the frontend
 `package.json`. Commit NuGet `packages.lock.json` files and npm `package-lock.json`.
 Use `dotnet restore --locked-mode` and `npm ci` to reproduce dependencies.
-Update pins and locks together in a reviewed PR; CI actions are pinned to commits.
+Use the latest stable .NET 10 SDK: locally `global.json` selects the latest
+installed 10.0 feature band/patch; CI installs `10.0.x`. Preview SDKs and .NET 11
+are excluded. Keep the local SDK updated; roll-forward selects installed SDKs
+and does not download them. If an SDK update changes the restore graph, review
+and regenerate the lockfiles rather than disabling locked restore in CI.
+Update other pins and locks together in a reviewed PR; CI actions are pinned to commits.

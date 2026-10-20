@@ -6,6 +6,13 @@ public class RuntimeSmokeTests
     [Test]
     public async Task Test_process_uses_the_supported_runtime()
     {
-        await Assert.That(Environment.Version.Major).IsEqualTo(10);
+        // Arrange
+        const int supportedMajorVersion = 10;
+
+        // Act
+        var actualMajorVersion = Environment.Version.Major;
+
+        // Assert
+        await Assert.That(actualMajorVersion).IsEqualTo(supportedMajorVersion);
     }
 }

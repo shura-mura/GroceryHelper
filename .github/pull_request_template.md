@@ -19,8 +19,11 @@ Closes #
 
 - [ ] Standards and issue/spec review completed.
 - [ ] Required checks passed.
-- [ ] Maintainer manually approved the PR in GitHub.
-- [ ] Maintainer separately instructed the merge.
+- [ ] Maintainer closed the PR without merging.
+- [ ] Maintainer explicitly confirmed this PR is approved.
+- [ ] PR reopened and required checks verified for the approved changes.
+- [ ] Merge verified before closing the linked issue and deleting the source branch.
 
-<!-- Keep draft while a distinct PR-author/reviewer identity is unavailable.
-     Passing checks or this checklist is not permission to merge. -->
+<!-- Follow CONTRIBUTING.md: maintainer closure plus explicit approval authorizes
+     reopening, merging, issue completion, and safe source-branch cleanup.
+     A GitHub approving review is not required. Checkbox ticks alone are not approval. -->
