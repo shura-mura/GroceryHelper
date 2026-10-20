@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GroceryHelper.Api/GroceryHelper.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GroceryHelper.IntegrationTests/GroceryHelper.IntegrationTests.csproj" />
+    <Project Path="tests/GroceryHelper.UnitTests/GroceryHelper.UnitTests.csproj" />
+  </Folder>
+</Solution>

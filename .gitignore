@@ -1,1 +1,12 @@
 .vscode/
+.codex/
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/TestResults/
+**/test-results/
+**/playwright-report/
+.env
+.env.*
+!.env.example
