@@ -40,7 +40,8 @@ export const test = base.extend<{ applicationUrl: string }>({
           reject(new Error(`API exited (${code}):\n${log}`));
         });
         api.stdout.on('data', () => {
-          const match = /Now listening on: (http:\/\/127\.0\.0\.1:\d+)/.exec(log);
+          const match = /Now listening on: (http:\/\/127\.0\.0\.1:\d+)/.exec(log)
+            ?? /"address":"(http:\/\/127\.0\.0\.1:\d+)"/.exec(log);
           if (match) { cleanup(); resolve(match[1]); }
         });
       });
