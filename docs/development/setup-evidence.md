@@ -9,6 +9,12 @@ These observations were collected while implementing issue #1.
 | Browser/API wiring | `startup.spec.ts` failed because the status element did not exist. | The React scaffold calls the real backend probe and displays `Backend connected`; the test passed. |
 | TUnit harness guard | Running the one-test unit suite with `--minimum-expected-tests 2` exited with code 9. | With the correct floor of 1, the runtime smoke test passed. This is harness validation, not a business TDD cycle. |
 
+Final local validation passed the Release build, one TUnit runtime smoke test,
+two API integration tests, frontend type checking/lint/build, and two repeated
+Playwright executions using two workers. That parallel run exposed a shared Vite
+cache rename warning despite passing assertions; each test now uses its own
+cache directory as well as its own servers.
+
 Reproduce focused tests using the commands in README. CI publishes backend
 reports and Playwright diagnostics. Failures retain browser traces/screenshots
 and the actual backend log.

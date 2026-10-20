@@ -53,7 +53,7 @@ around this. See [repository protections](docs/development/repository-protection
 - **TUnit integration:** a fresh `WebApplicationFactory` per test. Exercise HTTP
   behavior and the real application composition. Tests may run concurrently.
 - **Playwright:** each test starts its own backend process and Vite server on
-  OS-assigned ports, plus its own browser context. The backend is real, never an
+  OS-assigned ports, with its own Vite cache and browser context. The backend is real, never an
   API mock. Processes stop in fixture teardown; developer servers are never reused.
   This also isolates the future single account, password changes, and in-memory data.
 - Keep data test-owned and deterministic. New persistence or shared external
