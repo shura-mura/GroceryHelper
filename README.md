@@ -3,9 +3,8 @@
 A client/server demonstration project focused on test-driven development,
 code quality, and justified design decisions.
 
-The development scaffold runs ASP.NET Core/C# and React/TypeScript. TUnit
-validates the backend test infrastructure; Playwright connects the browser to a
-real backend. Authentication and grocery features are not implemented yet.
+The application runs ASP.NET Core/C# and React/TypeScript. TUnit validates the
+backend behavior; Playwright connects the browser to a real backend.
 
 ## Prerequisites
 
@@ -48,11 +47,19 @@ cd src/GroceryHelper.Web
 npm run dev
 ```
 
-Open <http://127.0.0.1:5173>. The scaffold should show **Backend connected**.
-Vite proxies `/health` and future `/api` calls to the backend, keeping browser
+Open <http://127.0.0.1:5173>. The application should show **Backend connected**.
+Vite proxies `/health` and `/api` calls to the backend, keeping browser
 requests on one origin. The setup readiness probe exists only in Development
 and Testing, not Production. It is not an application API or authentication
 implementation.
+
+### Demo account
+
+Sign in with username `demo` and password `GroceryDemo1!`. Username matching
+ignores case and surrounding whitespace; the password must be entered exactly.
+The account and its server-managed sessions are kept in backend memory. Restart
+the backend to restore the documented demo password and clear authentication
+state, including all existing sessions.
 
 ### Local observability
 
@@ -157,9 +164,7 @@ features. See [setup evidence](docs/development/setup-evidence.md).
 - Reusable category tags, with name search and category filtering within a list.
 - In-memory storage that resets when the backend restarts.
 
-Data will survive browser refresh and reset on backend restart. There are no demo
-credentials yet because authentication is not implemented. The current demo is
-limited to starting both servers and observing the connection status.
+Data will survive browser refresh and reset on backend restart.
 
 ## Development
 
