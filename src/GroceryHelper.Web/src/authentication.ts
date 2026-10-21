@@ -10,6 +10,8 @@ interface ProblemResponse {
   detail?: string;
 }
 
+const sessionMarker = 'GroceryHelper.SessionKnown';
+
 export type SignInResult =
   | { authenticated: true; session: Session }
   | { authenticated: false; message: string };
@@ -17,11 +19,18 @@ export type SignInResult =
 export async function initializeAuthentication(signal: AbortSignal): Promise<{
   token: string;
   session?: Session;
+  sessionEnded: boolean;
 }> {
-  const csrfResponse = await fetch('/api/auth/csrf', { signal });
-  if (!csrfResponse.ok) throw new Error('CSRF bootstrap failed');
-  const csrf = await csrfResponse.json() as CsrfResponse;
-  return { token: csrf.token, session: await getSession(signal) };
+  const token = await getCsrfToken(signal);
+  const session = await getSession(signal);
+  const sessionEnded = !session && localStorage.getItem(sessionMarker) === 'true';
+  if (session) {
+    localStorage.setItem(sessionMarker, 'true');
+  } else {
+    localStorage.removeItem(sessionMarker);
+  }
+
+  return { token, session, sessionEnded };
 }
 
 export async function signIn(
@@ -47,7 +56,25 @@ export async function signIn(
 
   const session = await getSession();
   if (!session) throw new Error('Session lookup failed');
+  localStorage.setItem(sessionMarker, 'true');
   return { authenticated: true, session };
+}
+
+export async function logOutEverywhere(): Promise<void> {
+  const csrfToken = await getCsrfToken();
+  const response = await fetch('/api/auth/logout', {
+    method: 'POST',
+    headers: { 'X-CSRF-TOKEN': csrfToken },
+  });
+  if (!response.ok) throw new Error('Logout failed');
+  localStorage.removeItem(sessionMarker);
+}
+
+async function getCsrfToken(signal?: AbortSignal): Promise<string> {
+  const response = await fetch('/api/auth/csrf', { signal });
+  if (!response.ok) throw new Error('CSRF bootstrap failed');
+  const csrf = await response.json() as CsrfResponse;
+  return csrf.token;
 }
 
 async function getSession(signal?: AbortSignal): Promise<Session | undefined> {

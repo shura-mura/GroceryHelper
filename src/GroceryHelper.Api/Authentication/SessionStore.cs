@@ -35,6 +35,14 @@ public sealed class SessionStore
         }
     }
 
+    public void RevokeAll()
+    {
+        lock (sync)
+        {
+            sessions.Clear();
+        }
+    }
+
     private static string Hash(string token) =>
         Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
 

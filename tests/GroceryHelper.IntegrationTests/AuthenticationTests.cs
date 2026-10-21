@@ -197,6 +197,95 @@ public class AuthenticationTests
     }
 
     [Test]
+    public async Task Authenticated_logout_revokes_every_session()
+    {
+        // Arrange
+        await using var factory = CreateFactory();
+        using var firstBrowser = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        using var secondBrowser = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        using var firstLogin = await LoginAsync(firstBrowser, "demo", "GroceryDemo1!");
+        using var secondLogin = await LoginAsync(secondBrowser, "demo", "GroceryDemo1!");
+        var csrfToken = await GetCsrfTokenAsync(firstBrowser);
+        using var logoutRequest = CreateLogoutRequest(csrfToken);
+
+        // Act
+        using var logoutResponse = await firstBrowser.SendAsync(logoutRequest);
+        using var firstSession = await firstBrowser.GetAsync("/api/auth/session");
+        using var secondSession = await secondBrowser.GetAsync("/api/auth/session");
+
+        // Assert
+        await Assert.That(firstLogin.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That(secondLogin.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That(logoutResponse.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That(firstSession.StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That(secondSession.StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+    }
+
+    [Test]
+    public async Task Expired_logout_clears_only_the_callers_cookie()
+    {
+        // Arrange
+        var firstLoginTime = new DateTimeOffset(2035, 4, 5, 6, 7, 8, TimeSpan.Zero);
+        var timeProvider = new MutableTimeProvider(firstLoginTime);
+        await using var factory = CreateFactory(timeProvider);
+        using var expiredBrowser = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        using var currentBrowser = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        using var expiredLogin = await LoginAsync(expiredBrowser, "demo", "GroceryDemo1!");
+        timeProvider.UtcNow = firstLoginTime.AddHours(1);
+        using var currentLogin = await LoginAsync(currentBrowser, "demo", "GroceryDemo1!");
+        timeProvider.UtcNow = firstLoginTime.Add(SessionStore.Lifetime);
+        var csrfToken = await GetCsrfTokenAsync(expiredBrowser);
+        using var logoutRequest = CreateLogoutRequest(csrfToken);
+
+        // Act
+        using var logoutResponse = await expiredBrowser.SendAsync(logoutRequest);
+        using var currentSession = await currentBrowser.GetAsync("/api/auth/session");
+
+        // Assert
+        await Assert.That(expiredLogin.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That(currentLogin.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That(logoutResponse.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That(logoutResponse.Headers.GetValues("Set-Cookie").Single())
+            .Contains("GroceryHelper.Session=;");
+        await Assert.That(currentSession.StatusCode).IsEqualTo(HttpStatusCode.OK);
+    }
+
+    [Test]
+    public async Task Missing_or_invalid_csrf_proof_cannot_log_out_any_session()
+    {
+        // Arrange
+        await using var factory = CreateFactory();
+        using var firstBrowser = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        using var secondBrowser = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        using var firstLogin = await LoginAsync(firstBrowser, "demo", "GroceryDemo1!");
+        using var secondLogin = await LoginAsync(secondBrowser, "demo", "GroceryDemo1!");
+        using var missingProofRequest = CreateLogoutRequest(null);
+        using var invalidProofRequest = CreateLogoutRequest("invalid-proof");
+
+        // Act
+        using var missingProofResponse = await firstBrowser.SendAsync(missingProofRequest);
+        using var invalidProofResponse = await firstBrowser.SendAsync(invalidProofRequest);
+        using var firstSession = await firstBrowser.GetAsync("/api/auth/session");
+        using var secondSession = await secondBrowser.GetAsync("/api/auth/session");
+
+        // Assert
+        await Assert.That(firstLogin.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That(secondLogin.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That(missingProofResponse.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(invalidProofResponse.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(missingProofResponse.Headers.Contains("Set-Cookie")).IsFalse();
+        await Assert.That(invalidProofResponse.Headers.Contains("Set-Cookie")).IsFalse();
+        await Assert.That(firstSession.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        await Assert.That(secondSession.StatusCode).IsEqualTo(HttpStatusCode.OK);
+    }
+
+    [Test]
     public async Task Session_and_cookie_expire_at_the_original_eight_hour_deadline()
     {
         // Arrange
@@ -325,6 +414,17 @@ public class AuthenticationTests
             Content = JsonContent.Create(new { username, password }),
         };
         request.Headers.Add("X-CSRF-TOKEN", csrfToken);
+        return request;
+    }
+
+    private static HttpRequestMessage CreateLogoutRequest(string? csrfToken)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
+        if (csrfToken is not null)
+        {
+            request.Headers.Add("X-CSRF-TOKEN", csrfToken);
+        }
+
         return request;
     }
 

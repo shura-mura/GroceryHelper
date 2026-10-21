@@ -83,3 +83,32 @@ test('two browsers remain signed in simultaneously', async ({
   await firstContext.close();
   await secondContext.close();
 });
+
+test('log out everywhere ends both browser sessions without confirmation', async ({
+  browser,
+  applicationUrl,
+}) => {
+  const firstContext = await browser.newContext();
+  const secondContext = await browser.newContext();
+  const firstPage = await firstContext.newPage();
+  const secondPage = await secondContext.newPage();
+  await signIn(firstPage, applicationUrl);
+  await signIn(secondPage, applicationUrl);
+  let confirmationShown = false;
+  firstPage.on('dialog', async (dialog) => {
+    confirmationShown = true;
+    await dialog.dismiss();
+  });
+
+  await firstPage.getByRole('button', { name: 'Log out everywhere', exact: true }).click();
+  await expect(firstPage.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+  await secondPage.reload();
+
+  expect(confirmationShown).toBe(false);
+  await expect(secondPage.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+  await expect(secondPage.getByRole('alert')).toHaveText(
+    'Your session ended. Unsaved changes were discarded.',
+  );
+  await firstContext.close();
+  await secondContext.close();
+});

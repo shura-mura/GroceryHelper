@@ -88,6 +88,31 @@ internal static class AuthenticationEndpoints
                 new SessionResponse(context.User.Identity!.Name!)))
             .RequireAuthorization();
 
+        app.MapPost(
+            "/api/auth/logout",
+            async (
+                HttpContext context,
+                IAntiforgery antiforgery,
+                SessionStore sessions) =>
+            {
+                try
+                {
+                    await antiforgery.ValidateRequestAsync(context);
+                }
+                catch (AntiforgeryValidationException)
+                {
+                    return Results.BadRequest();
+                }
+
+                if (context.User.Identity?.IsAuthenticated is true)
+                {
+                    sessions.RevokeAll();
+                }
+
+                context.Response.Cookies.Delete(SessionCookieName);
+                return Results.NoContent();
+            });
+
         return app;
     }
 

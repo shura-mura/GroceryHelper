@@ -1,5 +1,9 @@
 import { type FormEvent, useEffect, useState } from 'react';
-import { initializeAuthentication, signIn as requestSignIn } from './authentication';
+import {
+  initializeAuthentication,
+  logOutEverywhere as requestLogOutEverywhere,
+  signIn as requestSignIn,
+} from './authentication';
 import { checkBackendReadiness } from './backendReadiness';
 
 export function App() {
@@ -16,9 +20,12 @@ export function App() {
 
     void checkBackendReadiness(controller.signal)
       .then(() => initializeAuthentication(controller.signal))
-      .then(({ token, session }) => {
+      .then(({ token, session, sessionEnded }) => {
         setCsrfToken(token);
         setAccount(session?.username);
+        if (sessionEnded) {
+          setError('Your session ended. Unsaved changes were discarded.');
+        }
         setStatus('Backend connected');
       })
       .catch(() => {
@@ -50,12 +57,39 @@ export function App() {
     }
   }
 
+  async function logOutEverywhere() {
+    setSubmitting(true);
+    setError(undefined);
+    try {
+      await requestLogOutEverywhere();
+      setAccount(undefined);
+      setUsername('');
+      setPassword('');
+    } catch {
+      setError('Unable to log out');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <main>
       <h1>GroceryHelper</h1>
       <p role="status">{status}</p>
       {account
-        ? <h2>Signed in as {account}</h2>
+        ? (
+          <section>
+            <h2>Signed in as {account}</h2>
+            <button
+              disabled={submitting}
+              type="button"
+              onClick={() => { void logOutEverywhere(); }}
+            >
+              Log out everywhere
+            </button>
+            {error && <p role="alert">{error}</p>}
+          </section>
+        )
         : (
           <form onSubmit={(event) => { void signIn(event); }}>
             <h2>Sign in</h2>
