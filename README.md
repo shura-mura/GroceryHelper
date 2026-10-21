@@ -100,6 +100,18 @@ JSON-pointer keys in `errors`, and every problem includes the active W3C
 contract applies under `/api`; health checks and responses that cannot contain
 a body are excluded.
 
+The browser writes OpenTelemetry page-load, same-origin fetch, and sanitized
+error spans to browser diagnostics. Its resource is identified as
+`GroceryHelper.Web`, with the package/build version and Vite deployment mode;
+set `BUILD_VERSION` and `DEPLOYMENT_ENVIRONMENT` when producing a deployment
+artifact. W3C trace context is added only to same-origin `/api` requests and the
+Development/Testing `/health` probe. Browser diagnostics contain an allowlisted
+span summary rather than URLs, query strings, headers, DOM or console content,
+credentials, user identity, or grocery data. Cross-origin propagation and a
+central browser exporter remain disabled until explicit destinations are
+selected. Graceful page shutdown attempts a bounded telemetry flush; abrupt
+termination can lose pending signals.
+
 ## Validation
 
 From the repository root:
