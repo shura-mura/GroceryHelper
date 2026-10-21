@@ -47,16 +47,22 @@ test('reopening a browser restores its unexpired session', async ({
 }, testInfo) => {
   const profilePath = testInfo.outputPath('browser-profile');
   const originalContext = await browser.browserType().launchPersistentContext(profilePath);
-  const originalPage = await originalContext.newPage();
-  await signIn(originalPage, applicationUrl);
-  await originalContext.close();
+  try {
+    const originalPage = await originalContext.newPage();
+    await signIn(originalPage, applicationUrl);
+  } finally {
+    await originalContext.close();
+  }
 
   const reopenedContext = await browser.browserType().launchPersistentContext(profilePath);
-  const reopenedPage = await reopenedContext.newPage();
-  await reopenedPage.goto(applicationUrl);
+  try {
+    const reopenedPage = await reopenedContext.newPage();
+    await reopenedPage.goto(applicationUrl);
 
-  await expect(reopenedPage.getByRole('heading', { name: 'Signed in as demo' })).toBeVisible();
-  await reopenedContext.close();
+    await expect(reopenedPage.getByRole('heading', { name: 'Signed in as demo' })).toBeVisible();
+  } finally {
+    await reopenedContext.close();
+  }
 });
 
 test('two browsers remain signed in simultaneously', async ({
