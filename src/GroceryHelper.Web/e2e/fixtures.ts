@@ -47,6 +47,7 @@ export const test = base.extend<{ applicationUrl: string }>({
       });
       web = await createServer({
         root: webRoot,
+        mode: 'testing',
         cacheDir: testInfo.outputPath('.vite'),
         server: {
           host: '127.0.0.1',
