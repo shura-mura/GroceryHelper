@@ -92,6 +92,14 @@ API keeps running with console logging and reports the sink diagnostic to
 standard error.
 Production collectors remain intentionally deferred.
 
+API failures use RFC 9457 Problem Details with the
+`application/problem+json` media type. Generic failures use `about:blank`,
+validation failures use `urn:grocery-helper:problem:validation-error` with
+JSON-pointer keys in `errors`, and every problem includes the active W3C
+`traceId`. Exception details remain server-side in every environment. The
+contract applies under `/api`; health checks and responses that cannot contain
+a body are excluded.
+
 ## Validation
 
 From the repository root:
