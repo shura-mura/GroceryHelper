@@ -7,45 +7,35 @@ namespace GroceryHelper.IntegrationTests;
 
 public class ObservabilityTests
 {
-    [Test, NotInParallel]
+    [Test]
     public async Task Request_is_logged_as_structured_data_without_sensitive_inputs()
     {
         // Arrange
         const string secret = "sentinel-secret-value";
-        var temporaryDirectory = Path.Combine(
-            Path.GetTempPath(),
-            $"grocery-helper-observability-{Guid.NewGuid():N}");
-        var logPath = Path.Combine(temporaryDirectory, "api-.ndjson");
-        Directory.CreateDirectory(temporaryDirectory);
-        var overrides = new Dictionary<string, string?>
+        const string traceId = "0af7651916cd43dd8448eb211c80319c";
+        using var temporaryDirectory = new TemporaryDirectory();
+        var logPath = Path.Combine(temporaryDirectory.DirectoryPath, "api-.ndjson");
+        await using (var factory = CreateFactory(new Dictionary<string, string?>
         {
-            ["Observability__File__Enabled"] = "true",
-            ["Observability__File__Path"] = logPath,
-            ["Observability__MinimumLevel"] = "Debug",
-        };
-        var previousValues = overrides.Keys.ToDictionary(
-            key => key,
-            Environment.GetEnvironmentVariable);
-        foreach (var (key, value) in overrides)
+            ["Observability:File:Enabled"] = "true",
+            ["Observability:File:Path"] = logPath,
+            ["Observability:MinimumLevel"] = "Debug",
+        }))
         {
-            Environment.SetEnvironmentVariable(key, value);
-        }
+            using var client = factory.CreateClient();
+            client.DefaultRequestHeaders.TryAddWithoutValidation(
+                "Authorization",
+                $"Bearer {secret}");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"session={secret}");
+            client.DefaultRequestHeaders.TryAddWithoutValidation(
+                "traceparent",
+                $"00-{traceId}-b7ad6b7169203331-01");
 
-        try
-        {
             // Act
-            await using (var factory = new WebApplicationFactory<Program>()
-                .WithWebHostBuilder(builder => builder.UseEnvironment("Testing")))
-            {
-                using var client = factory.CreateClient();
-                client.DefaultRequestHeaders.TryAddWithoutValidation(
-                    "Authorization",
-                    $"Bearer {secret}");
-                client.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"session={secret}");
-                using var response = await client.GetAsync($"/health?search={secret}");
-            }
-
-            var rolledLogPath = Directory.GetFiles(temporaryDirectory, "api-*.ndjson").Single();
+            using var response = await client.GetAsync($"/health?search={secret}");
+            var rolledLogPath = Directory.GetFiles(
+                temporaryDirectory.DirectoryPath,
+                "api-*.ndjson").Single();
             await using var logStream = new FileStream(
                 rolledLogPath,
                 FileMode.Open,
@@ -63,46 +53,25 @@ public class ObservabilityTests
             await Assert.That(properties.GetProperty("RouteTemplate").GetString()).IsEqualTo("/health");
             await Assert.That(properties.GetProperty("StatusCode").GetInt32()).IsEqualTo(200);
             await Assert.That(properties.GetProperty("ElapsedMilliseconds").GetDouble()).IsGreaterThanOrEqualTo(0);
-            await Assert.That(properties.GetProperty("TraceId").GetString()).Length().IsEqualTo(32);
+            await Assert.That(properties.GetProperty("TraceId").GetString()).IsEqualTo(traceId);
             await Assert.That(log).DoesNotContain(secret);
-        }
-        finally
-        {
-            foreach (var (key, value) in previousValues)
-            {
-                Environment.SetEnvironmentVariable(key, value);
-            }
-
-            Directory.Delete(temporaryDirectory, recursive: true);
         }
     }
 
-    [Test, NotInParallel]
+    [Test]
     public async Task Invalid_file_sink_configuration_does_not_prevent_requests()
     {
         // Arrange
-        var temporaryDirectory = Path.Combine(
-            Path.GetTempPath(),
-            $"grocery-helper-observability-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(temporaryDirectory);
-        var overrides = new Dictionary<string, string?>
+        using var temporaryDirectory = new TemporaryDirectory();
+        await using (var factory = CreateFactory(new Dictionary<string, string?>
         {
-            ["Observability__File__Enabled"] = "true",
-            ["Observability__File__Path"] = Path.Combine(temporaryDirectory, "api-.ndjson"),
-            ["Observability__File__SizeLimitBytes"] = "0",
-        };
-        var previousValues = overrides.Keys.ToDictionary(
-            key => key,
-            Environment.GetEnvironmentVariable);
-        foreach (var (key, value) in overrides)
+            ["Observability:File:Enabled"] = "true",
+            ["Observability:File:Path"] = Path.Combine(
+                temporaryDirectory.DirectoryPath,
+                "api-.ndjson"),
+            ["Observability:File:SizeLimitBytes"] = "0",
+        }))
         {
-            Environment.SetEnvironmentVariable(key, value);
-        }
-
-        try
-        {
-            await using var factory = new WebApplicationFactory<Program>()
-                .WithWebHostBuilder(builder => builder.UseEnvironment("Testing"));
             using var client = factory.CreateClient();
 
             // Act
@@ -111,45 +80,63 @@ public class ObservabilityTests
             // Assert
             await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
         }
-        finally
-        {
-            foreach (var (key, value) in previousValues)
-            {
-                Environment.SetEnvironmentVariable(key, value);
-            }
-
-            Directory.Delete(temporaryDirectory, recursive: true);
-        }
     }
 
-    [Test, NotInParallel]
+    [Test]
     public async Task Testing_does_not_create_a_shared_log_file_by_default()
     {
         // Arrange
-        var temporaryDirectory = Path.Combine(
-            Path.GetTempPath(),
-            $"grocery-helper-observability-{Guid.NewGuid():N}");
-        var logPath = Path.Combine(temporaryDirectory, "api-.ndjson");
-        var previousPath = Environment.GetEnvironmentVariable("Observability__File__Path");
-        Directory.CreateDirectory(temporaryDirectory);
-        Environment.SetEnvironmentVariable("Observability__File__Path", logPath);
-
-        try
+        using var temporaryDirectory = new TemporaryDirectory();
+        await using (var factory = CreateFactory(new Dictionary<string, string?>
         {
-            await using var factory = new WebApplicationFactory<Program>()
-                .WithWebHostBuilder(builder => builder.UseEnvironment("Testing"));
+            ["Observability:File:Path"] = Path.Combine(
+                temporaryDirectory.DirectoryPath,
+                "api-.ndjson"),
+        }))
+        {
             using var client = factory.CreateClient();
 
             // Act
             using var response = await client.GetAsync("/health");
 
             // Assert
-            await Assert.That(Directory.GetFiles(temporaryDirectory)).IsEmpty();
+            await Assert.That(Directory.GetFiles(temporaryDirectory.DirectoryPath)).IsEmpty();
         }
-        finally
+    }
+
+    private static WebApplicationFactory<Program> CreateFactory(
+        IReadOnlyDictionary<string, string?> configuration) =>
+        new ConfiguredWebApplicationFactory(configuration);
+
+    private sealed class ConfiguredWebApplicationFactory(
+        IReadOnlyDictionary<string, string?> configuration)
+        : WebApplicationFactory<Program>
+    {
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            Environment.SetEnvironmentVariable("Observability__File__Path", previousPath);
-            Directory.Delete(temporaryDirectory, recursive: true);
+            builder.UseEnvironment("Testing");
+            foreach (var (key, value) in configuration)
+            {
+                builder.UseSetting(key, value);
+            }
+        }
+    }
+
+    private sealed class TemporaryDirectory : IDisposable
+    {
+        public TemporaryDirectory()
+        {
+            DirectoryPath = Path.Combine(
+                Path.GetTempPath(),
+                $"grocery-helper-observability-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(DirectoryPath);
+        }
+
+        public string DirectoryPath { get; }
+
+        public void Dispose()
+        {
+            Directory.Delete(DirectoryPath, recursive: true);
         }
     }
 }
