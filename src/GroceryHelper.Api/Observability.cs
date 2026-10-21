@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Reflection;
 using Microsoft.AspNetCore.Routing;
 using OpenTelemetry;
@@ -87,7 +88,7 @@ internal static class Observability
         var openTelemetry = builder.Services.AddOpenTelemetry()
             .ConfigureResource(resource => resource
                 .AddService(
-                    serviceName: "GroceryHelper.Api",
+                    serviceName: ApiTelemetry.InstrumentationName,
                     serviceVersion: serviceVersion)
                 .AddAttributes([
                     new KeyValuePair<string, object>(
@@ -95,13 +96,12 @@ internal static class Observability
                         environment.EnvironmentName),
                 ]))
             .WithTracing(tracing => tracing
-                .SetSampler(environment.IsDevelopment()
-                    ? new AlwaysOnSampler()
-                    : new ParentBasedSampler(new AlwaysOnSampler()))
+                .AddSource(ApiTelemetry.InstrumentationName)
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddProcessor(new PrivacyFilteringActivityProcessor()))
             .WithMetrics(metrics => metrics
+                .AddMeter(ApiTelemetry.InstrumentationName)
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation());
@@ -140,6 +140,16 @@ internal static class Observability
             out var configuredLevel)
             ? configuredLevel
             : defaultLevel;
+}
+
+internal static class ApiTelemetry
+{
+    public const string InstrumentationName = "GroceryHelper.Api";
+
+    public static ActivitySource ActivitySource { get; } =
+        new(InstrumentationName);
+
+    public static Meter Meter { get; } = new(InstrumentationName);
 }
 
 internal sealed class TelemetryLifetime(
@@ -182,12 +192,12 @@ internal sealed class TelemetryLifetime(
 
 internal sealed class PrivacyFilteringActivityProcessor : BaseProcessor<Activity>
 {
-    private static readonly string[] QueryBearingTags =
-        ["url.query", "url.full", "http.target"];
+    private static readonly string[] SensitiveRequestTags =
+        ["url.query", "url.path", "url.full", "http.target"];
 
     public override void OnEnd(Activity activity)
     {
-        foreach (var tagName in QueryBearingTags)
+        foreach (var tagName in SensitiveRequestTags)
         {
             activity.SetTag(tagName, value: null);
         }

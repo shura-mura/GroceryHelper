@@ -22,15 +22,7 @@ public class TelemetryTests
         const string traceId = "0af7651916cd43dd8448eb211c80319c";
         var activities = new ConcurrentCollection<Activity>();
         var metrics = new ConcurrentCollection<Metric>();
-        await using var factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                builder.UseEnvironment("Testing");
-                builder.ConfigureServices(services => services
-                    .AddOpenTelemetry()
-                    .WithTracing(tracing => tracing.AddInMemoryExporter(activities))
-                    .WithMetrics(metering => metering.AddInMemoryExporter(metrics)));
-            });
+        await using var factory = CreateFactory(activities, metrics);
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.TryAddWithoutValidation(
             "traceparent",
@@ -38,6 +30,7 @@ public class TelemetryTests
 
         // Act
         using var response = await client.GetAsync($"/health?search={secret}");
+        using var missingResponse = await client.GetAsync($"/lists/{secret}");
         factory.Services.GetRequiredService<TracerProvider>().ForceFlush();
         factory.Services.GetRequiredService<MeterProvider>().ForceFlush();
 
@@ -48,8 +41,12 @@ public class TelemetryTests
             activity.DisplayName == "GET /health");
         await Assert.That(serverSpan.DisplayName).IsEqualTo("GET /health");
         await Assert.That(serverSpan.GetTagItem("http.route")).IsEqualTo("/health");
-        await Assert.That(serverSpan.Tags.Any(tag =>
-            tag.Key is "url.query" or "http.target" || tag.Value?.Contains(secret) == true))
+        await Assert.That(activities
+            .Where(activity => activity.TraceId.ToHexString() == traceId)
+            .SelectMany(activity => activity.Tags)
+            .Any(tag =>
+                tag.Key is "url.query" or "url.path" or "url.full" or "http.target" ||
+                tag.Value?.Contains(secret) == true))
             .IsFalse();
 
         var requestDuration = metrics.First(metric =>

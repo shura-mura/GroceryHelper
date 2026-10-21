@@ -85,10 +85,11 @@ set. Trace and metric console export is likewise Development-only unless
 set. Testing adds no exporter by default, so integration tests can attach their
 own in-memory exporters without periodic or shared output. Graceful shutdown
 uses the bounded `Observability__OpenTelemetry__FlushTimeoutMilliseconds`
-budget. OpenTelemetry's builder remains the composition seam for a future OTLP
-exporter and parent-based production sampling; neither is selected here. If the
-optional file destination is invalid or unavailable, the API keeps
-running with console logging and reports the sink diagnostic to standard error.
+budget. OpenTelemetry's standard sampler configuration and builder remain the
+seams for future parent-based production sampling and OTLP export; neither is
+selected here. If the optional file destination is invalid or unavailable, the
+API keeps running with console logging and reports the sink diagnostic to
+standard error.
 Production collectors remain intentionally deferred.
 
 ## Validation
