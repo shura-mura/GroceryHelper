@@ -251,8 +251,7 @@ internal sealed class RequestObservabilityMiddleware(
             var routeTemplate = (context.GetEndpoint() as RouteEndpoint)?.RoutePattern.RawText
                 ?? "unmatched";
             var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-            var traceId = Activity.Current?.TraceId.ToHexString()
-                ?? ActivityTraceId.CreateRandom().ToHexString();
+            var traceId = ApiProblemDetails.GetTraceId(context);
             var level = GetLevel(routeTemplate, statusCode);
 
             logger.Log(
