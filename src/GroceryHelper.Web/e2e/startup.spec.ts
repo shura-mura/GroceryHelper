@@ -78,9 +78,10 @@ test('trace context is limited to same-origin API and development health request
   await expect((await apiResponse).json()).resolves.toMatchObject({
     traceId: apiTraceparent?.split('-')[1],
   });
-  await expect.poll(
-    () => diagnostics.find((diagnostic) => diagnostic.span.name === 'GET /api')?.span.traceId,
-  ).toBe(apiTraceparent?.split('-')[1]);
+  await expect.poll(() => diagnostics.some(
+    (diagnostic) => diagnostic.span.name === 'GET /api'
+      && diagnostic.span.traceId === apiTraceparent?.split('-')[1],
+  )).toBe(true);
   expect((await apiRequest).headers()['baggage']).toBeUndefined();
   expect((await sameOriginPageRequest).headers()['traceparent']).toBeUndefined();
   expect((await crossOriginRequest).headers()['traceparent']).toBeUndefined();

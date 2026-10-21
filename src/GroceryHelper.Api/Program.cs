@@ -1,17 +1,23 @@
+using GroceryHelper.Api.Authentication;
+
 var builder = WebApplication.CreateBuilder(args);
 builder.AddObservability();
 builder.Services.AddApiProblemDetails();
+builder.Services.AddDemoAuthentication();
 builder.Services.AddHealthChecks();
 var app = builder.Build();
 
 app.UseRequestObservability();
 app.UseApiProblemDetails();
+app.UseAuthentication();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
 {
     app.MapHealthChecks("/health");
 }
 
+app.MapAuthenticationEndpoints();
 app.Run();
 
 public partial class Program;

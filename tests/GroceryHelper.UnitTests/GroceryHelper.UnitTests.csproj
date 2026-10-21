@@ -4,5 +4,6 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="TUnit" Version="1.75.0" />
+    <ProjectReference Include="../../src/GroceryHelper.Api/GroceryHelper.Api.csproj" />
   </ItemGroup>
 </Project>
