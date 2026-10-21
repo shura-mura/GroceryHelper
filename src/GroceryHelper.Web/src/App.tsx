@@ -1,10 +1,12 @@
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import {
+  clearKnownSession,
   initializeAuthentication,
   logOutEverywhere as requestLogOutEverywhere,
   signIn as requestSignIn,
 } from './authentication';
 import { checkBackendReadiness } from './backendReadiness';
+import { GroceryListView } from './GroceryListView';
 
 export function App() {
   const [status, setStatus] = useState('Connecting to backend');
@@ -14,26 +16,32 @@ export function App() {
   const [account, setAccount] = useState<string>();
   const [error, setError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
+  const handleSessionEnded = useCallback(() => {
+    clearKnownSession();
+    setAccount(undefined);
+    setUsername('');
+    setPassword('');
+    setError('Your session ended. Unsaved changes were discarded.');
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
 
-    void checkBackendReadiness(controller.signal)
-      .then(() => initializeAuthentication(controller.signal))
-      .then(({ token, session, sessionEnded }) => {
-        setCsrfToken(token);
-        setAccount(session?.username);
-        if (sessionEnded) {
-          setError('Your session ended. Unsaved changes were discarded.');
-        }
-        setStatus('Backend connected');
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setStatus('Backend unavailable');
-      });
+    void (async () => {
+      await checkBackendReadiness(controller.signal);
+      const { token, session, sessionEnded } = await initializeAuthentication(controller.signal);
+      setCsrfToken(token);
+      setAccount(session?.username);
+      if (sessionEnded) {
+        setError('Your session ended. Unsaved changes were discarded.');
+      }
+      setStatus('Backend connected');
+    })().catch(() => {
+      if (!controller.signal.aborted) setStatus('Backend unavailable');
+    });
 
     return () => controller.abort();
-  }, []);
+  }, [handleSessionEnded]);
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -87,6 +95,7 @@ export function App() {
             >
               Log out everywhere
             </button>
+            <GroceryListView onSessionEnded={handleSessionEnded} />
             {error && <p role="alert">{error}</p>}
           </section>
         )

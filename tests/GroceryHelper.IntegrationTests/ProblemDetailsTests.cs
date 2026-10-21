@@ -24,7 +24,7 @@ public class ProblemDetailsTests
             $"00-{traceId}-b7ad6b7169203331-01");
 
         // Act
-        using var response = await client.GetAsync($"/api/lists?search={secret}");
+        using var response = await client.GetAsync($"/api/missing?search={secret}");
         var body = await response.Content.ReadAsStringAsync();
         using var problem = JsonDocument.Parse(body);
 

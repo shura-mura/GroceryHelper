@@ -12,6 +12,10 @@ interface ProblemResponse {
 
 const sessionMarker = 'GroceryHelper.SessionKnown';
 
+export function clearKnownSession(): void {
+  localStorage.removeItem(sessionMarker);
+}
+
 export type SignInResult =
   | { authenticated: true; session: Session }
   | { authenticated: false; message: string };
@@ -67,10 +71,10 @@ export async function logOutEverywhere(): Promise<void> {
     headers: { 'X-CSRF-TOKEN': csrfToken },
   });
   if (!response.ok) throw new Error('Logout failed');
-  localStorage.removeItem(sessionMarker);
+  clearKnownSession();
 }
 
-async function getCsrfToken(signal?: AbortSignal): Promise<string> {
+export async function getCsrfToken(signal?: AbortSignal): Promise<string> {
   const response = await fetch('/api/auth/csrf', { signal });
   if (!response.ok) throw new Error('CSRF bootstrap failed');
   const csrf = await response.json() as CsrfResponse;
