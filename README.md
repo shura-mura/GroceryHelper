@@ -54,7 +54,7 @@ requests on one origin. The setup readiness probe exists only in Development
 and Testing, not Production. It is not an application API or authentication
 implementation.
 
-### Local logs
+### Local observability
 
 The API writes structured newline-delimited JSON to the console. In Development
 it also writes rolling files under `src/GroceryHelper.Api/logs/`; the date and a
@@ -68,15 +68,28 @@ Health-probe completions are below the default Information level. Request query
 strings, bodies, headers, cookies, raw identifiers, and user-entered values are
 not logged.
 
+Development also writes OpenTelemetry traces and metrics to the console. Server
+spans use W3C trace context and route templates, while HTTP and runtime metrics
+cover request duration and activity, failures, CPU, memory, garbage collection,
+and thread-pool behavior. Query strings and raw resource identifiers are not
+telemetry attributes. The resource is identified as `GroceryHelper.Api`, with
+its build version and the current deployment environment.
+
 Safe defaults live under `Observability` in the API `appsettings` files. Override
 individual values with normal ASP.NET Core configuration, such as
 `Observability__MinimumLevel=Debug` or
 `Observability__File__Path=C:\logs\grocery-helper-.ndjson`. File logging is off
 outside Development unless `Observability__File__Enabled=true` is explicitly
-set. If the optional file destination is invalid or unavailable, the API keeps
+set. Trace and metric console export is likewise Development-only unless
+`Observability__OpenTelemetry__ConsoleExporter__Enabled=true` is explicitly
+set. Testing adds no exporter by default, so integration tests can attach their
+own in-memory exporters without periodic or shared output. Graceful shutdown
+uses the bounded `Observability__OpenTelemetry__FlushTimeoutMilliseconds`
+budget. OpenTelemetry's builder remains the composition seam for a future OTLP
+exporter and parent-based production sampling; neither is selected here. If the
+optional file destination is invalid or unavailable, the API keeps
 running with console logging and reports the sink diagnostic to standard error.
-Production collectors and trace/metric export are intentionally deferred to
-the later observability slices.
+Production collectors remain intentionally deferred.
 
 ## Validation
 
