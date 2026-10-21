@@ -54,6 +54,30 @@ requests on one origin. The setup readiness probe exists only in Development
 and Testing, not Production. It is not an application API or authentication
 implementation.
 
+### Local logs
+
+The API writes structured newline-delimited JSON to the console. In Development
+it also writes rolling files under `src/GroceryHelper.Api/logs/`; the date and a
+sequence number are added to `grocery-helper-.ndjson` as files roll. Files roll
+daily and at 10 MB, and seven files are retained. The directory is ignored by
+Git.
+
+Each completed request records its HTTP method, route template, status, elapsed
+milliseconds, and W3C trace ID. Search for that `TraceId` to correlate events.
+Health-probe completions are below the default Information level. Request query
+strings, bodies, headers, cookies, raw identifiers, and user-entered values are
+not logged.
+
+Safe defaults live under `Observability` in the API `appsettings` files. Override
+individual values with normal ASP.NET Core configuration, such as
+`Observability__MinimumLevel=Debug` or
+`Observability__File__Path=C:\logs\grocery-helper-.ndjson`. File logging is off
+outside Development unless `Observability__File__Enabled=true` is explicitly
+set. If the optional file destination is invalid or unavailable, the API keeps
+running with console logging and reports the sink diagnostic to standard error.
+Production collectors and trace/metric export are intentionally deferred to
+the later observability slices.
+
 ## Validation
 
 From the repository root:
