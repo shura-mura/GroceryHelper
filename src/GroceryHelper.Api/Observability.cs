@@ -1,5 +1,11 @@
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using System.Reflection;
 using Microsoft.AspNetCore.Routing;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Serilog;
 using Serilog.Debugging;
 using Serilog.Events;
@@ -9,6 +15,9 @@ internal static class Observability
 {
     public static void AddObservability(this WebApplicationBuilder builder)
     {
+        Activity.DefaultIdFormat = ActivityIdFormat.W3C;
+        Activity.ForceDefaultIdFormat = true;
+
         SelfLog.Enable(TextWriter.Synchronized(Console.Error));
         var environment = builder.Environment;
         var configuration = builder.Configuration;
@@ -72,6 +81,51 @@ internal static class Observability
             new LoggerLifetime(
                 (IDisposable)logger,
                 services.GetRequiredService<IHostApplicationLifetime>()));
+
+        var serviceVersion = typeof(Program).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+        var openTelemetry = builder.Services.AddOpenTelemetry()
+            .ConfigureResource(resource => resource
+                .AddService(
+                    serviceName: ApiTelemetry.InstrumentationName,
+                    serviceVersion: serviceVersion)
+                .AddAttributes([
+                    new KeyValuePair<string, object>(
+                        "deployment.environment.name",
+                        environment.EnvironmentName),
+                ]))
+            .WithTracing(tracing => tracing
+                .AddSource(ApiTelemetry.InstrumentationName)
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddProcessor(new PrivacyFilteringActivityProcessor()))
+            .WithMetrics(metrics => metrics
+                .AddMeter(ApiTelemetry.InstrumentationName)
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddRuntimeInstrumentation());
+        var consoleExporterEnabled = configuration.GetValue<bool?>(
+            "Observability:OpenTelemetry:ConsoleExporter:Enabled")
+            ?? environment.IsDevelopment();
+        if (consoleExporterEnabled)
+        {
+            openTelemetry
+                .WithTracing(tracing => tracing.AddConsoleExporter())
+                .WithMetrics(metrics => metrics.AddConsoleExporter());
+        }
+
+        var configuredFlushTimeout = configuration.GetValue<int?>(
+            "Observability:OpenTelemetry:FlushTimeoutMilliseconds");
+        var flushTimeout = TimeSpan.FromMilliseconds(
+            configuredFlushTimeout is >= 0 and <= 30_000
+                ? configuredFlushTimeout.Value
+                : 5_000);
+        builder.Services.AddSingleton<IHostedService>(services =>
+            new TelemetryLifetime(
+                services.GetRequiredService<TracerProvider>(),
+                services.GetRequiredService<MeterProvider>(),
+                flushTimeout));
     }
 
     public static IApplicationBuilder UseRequestObservability(this WebApplication app) =>
@@ -86,6 +140,68 @@ internal static class Observability
             out var configuredLevel)
             ? configuredLevel
             : defaultLevel;
+}
+
+internal static class ApiTelemetry
+{
+    public const string InstrumentationName = "GroceryHelper.Api";
+
+    public static ActivitySource ActivitySource { get; } =
+        new(InstrumentationName);
+
+    public static Meter Meter { get; } = new(InstrumentationName);
+}
+
+internal sealed class TelemetryLifetime(
+    TracerProvider tracerProvider,
+    MeterProvider meterProvider,
+    TimeSpan flushTimeout) : IHostedService
+{
+    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        var started = Stopwatch.GetTimestamp();
+        TryFlush(tracerProvider.ForceFlush, RemainingMilliseconds(started));
+        TryFlush(meterProvider.ForceFlush, RemainingMilliseconds(started));
+        return Task.CompletedTask;
+    }
+
+    private int RemainingMilliseconds(long started)
+    {
+        var remaining = flushTimeout - Stopwatch.GetElapsedTime(started);
+        return Math.Max(0, (int)Math.Ceiling(remaining.TotalMilliseconds));
+    }
+
+    private static void TryFlush(
+        Func<int, bool> forceFlush,
+        int timeoutMilliseconds)
+    {
+        try
+        {
+            forceFlush(timeoutMilliseconds);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            Console.Error.WriteLine(
+                "Telemetry flush did not complete ({0}).",
+                exception.GetType().Name);
+        }
+    }
+}
+
+internal sealed class PrivacyFilteringActivityProcessor : BaseProcessor<Activity>
+{
+    private static readonly string[] SensitiveRequestTags =
+        ["url.query", "url.path", "url.full", "http.target"];
+
+    public override void OnEnd(Activity activity)
+    {
+        foreach (var tagName in SensitiveRequestTags)
+        {
+            activity.SetTag(tagName, value: null);
+        }
+    }
 }
 
 internal sealed class LoggerLifetime : IHostedService, IDisposable
