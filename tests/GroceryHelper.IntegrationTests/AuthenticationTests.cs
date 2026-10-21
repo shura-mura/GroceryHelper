@@ -206,12 +206,11 @@ public class AuthenticationTests
         using var client = factory.CreateClient(
             new WebApplicationFactoryClientOptions { HandleCookies = true });
         using var loginResponse = await LoginAsync(client, "demo", "GroceryDemo1!");
-        var sessionCookie = SetCookieHeaderValue.Parse(
-            loginResponse.Headers.GetValues("Set-Cookie").Single());
+        var sessionCookie = ReadSessionCookie(loginResponse);
 
         // Act
         timeProvider.UtcNow = loginTime.AddHours(4);
-        using var activity = await client.GetAsync("/api/auth/session");
+        using var midwaySession = await client.GetAsync("/api/auth/session");
         timeProvider.UtcNow = loginTime.Add(SessionStore.Lifetime).AddTicks(-1);
         using var immediatelyBeforeExpiry = await client.GetAsync("/api/auth/session");
         timeProvider.UtcNow = loginTime.Add(SessionStore.Lifetime);
@@ -223,7 +222,7 @@ public class AuthenticationTests
         await Assert.That(loginResponse.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
         await Assert.That(sessionCookie.Expires).IsEqualTo(
             loginTime.Add(SessionStore.Lifetime));
-        await Assert.That(activity.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        await Assert.That(midwaySession.StatusCode).IsEqualTo(HttpStatusCode.OK);
         await Assert.That(immediatelyBeforeExpiry.StatusCode).IsEqualTo(HttpStatusCode.OK);
         await Assert.That(atExpiry.StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         await Assert.That(afterExpiry.StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
@@ -241,8 +240,10 @@ public class AuthenticationTests
         using var secondBrowser = factory.CreateClient(
             new WebApplicationFactoryClientOptions { HandleCookies = true });
         using var firstLogin = await LoginAsync(firstBrowser, "demo", "GroceryDemo1!");
+        var firstCookie = ReadSessionCookie(firstLogin);
         timeProvider.UtcNow = firstLoginTime.AddHours(1);
         using var secondLogin = await LoginAsync(secondBrowser, "demo", "GroceryDemo1!");
+        var secondCookie = ReadSessionCookie(secondLogin);
 
         // Act
         timeProvider.UtcNow = firstLoginTime.Add(SessionStore.Lifetime);
@@ -252,6 +253,10 @@ public class AuthenticationTests
         // Assert
         await Assert.That(firstLogin.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
         await Assert.That(secondLogin.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That(firstCookie.Expires).IsEqualTo(
+            firstLoginTime.Add(SessionStore.Lifetime));
+        await Assert.That(secondCookie.Expires).IsEqualTo(
+            firstLoginTime.AddHours(1).Add(SessionStore.Lifetime));
         await Assert.That(firstSession.StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         await Assert.That(secondSession.StatusCode).IsEqualTo(HttpStatusCode.OK);
     }
@@ -269,9 +274,8 @@ public class AuthenticationTests
                 originalClient,
                 "demo",
                 "GroceryDemo1!");
-            sessionCookie = loginResponse.Headers.GetValues("Set-Cookie")
-                .Single()
-                .Split(';', 2)[0];
+            var cookie = ReadSessionCookie(loginResponse);
+            sessionCookie = $"{cookie.Name}={cookie.Value}";
         }
 
         await using var restartedFactory = CreateFactory();
@@ -307,6 +311,9 @@ public class AuthenticationTests
         (await response.Content.ReadFromJsonAsync<JsonElement>())
         .GetProperty("token")
         .GetString();
+
+    private static SetCookieHeaderValue ReadSessionCookie(HttpResponseMessage response) =>
+        SetCookieHeaderValue.Parse(response.Headers.GetValues("Set-Cookie").Single());
 
     private static HttpRequestMessage CreateLoginRequest(
         string username,

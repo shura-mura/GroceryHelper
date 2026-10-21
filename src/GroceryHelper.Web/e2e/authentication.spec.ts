@@ -44,29 +44,29 @@ test('refresh restores the authenticated session', async ({
 test('reopening a browser restores its unexpired session', async ({
   browser,
   applicationUrl,
-}) => {
-  const originalBrowser = await browser.newContext();
-  const originalPage = await originalBrowser.newPage();
+}, testInfo) => {
+  const profilePath = testInfo.outputPath('browser-profile');
+  const originalContext = await browser.browserType().launchPersistentContext(profilePath);
+  const originalPage = await originalContext.newPage();
   await signIn(originalPage, applicationUrl);
-  const persistedState = await originalBrowser.storageState();
-  await originalBrowser.close();
+  await originalContext.close();
 
-  const reopenedBrowser = await browser.newContext({ storageState: persistedState });
-  const reopenedPage = await reopenedBrowser.newPage();
+  const reopenedContext = await browser.browserType().launchPersistentContext(profilePath);
+  const reopenedPage = await reopenedContext.newPage();
   await reopenedPage.goto(applicationUrl);
 
   await expect(reopenedPage.getByRole('heading', { name: 'Signed in as demo' })).toBeVisible();
-  await reopenedBrowser.close();
+  await reopenedContext.close();
 });
 
 test('two browsers remain signed in simultaneously', async ({
   browser,
   applicationUrl,
 }) => {
-  const firstBrowser = await browser.newContext();
-  const secondBrowser = await browser.newContext();
-  const firstPage = await firstBrowser.newPage();
-  const secondPage = await secondBrowser.newPage();
+  const firstContext = await browser.newContext();
+  const secondContext = await browser.newContext();
+  const firstPage = await firstContext.newPage();
+  const secondPage = await secondContext.newPage();
   await signIn(firstPage, applicationUrl);
 
   await signIn(secondPage, applicationUrl);
@@ -74,6 +74,6 @@ test('two browsers remain signed in simultaneously', async ({
 
   await expect(firstPage.getByRole('heading', { name: 'Signed in as demo' })).toBeVisible();
   await expect(secondPage.getByRole('heading', { name: 'Signed in as demo' })).toBeVisible();
-  await firstBrowser.close();
-  await secondBrowser.close();
+  await firstContext.close();
+  await secondContext.close();
 });
