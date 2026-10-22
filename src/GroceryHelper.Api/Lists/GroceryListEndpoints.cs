@@ -44,8 +44,24 @@ internal static class GroceryListEndpoints
                         });
                     }
 
-                    var list = store.Create(name.Value!);
-                    var response = GroceryListResponse.From(list);
+                    var creation = store.Create(name.Value!);
+                    if (!creation.Created)
+                    {
+                        return Results.ValidationProblem(
+                            new Dictionary<string, string[]>
+                            {
+                                ["/name"] =
+                                [
+                                    $"A grocery list named '{creation.List.Name.Value}' already exists.",
+                                ],
+                            },
+                            extensions: new Dictionary<string, object?>
+                            {
+                                ["existingListId"] = creation.List.Id.ToString(),
+                            });
+                    }
+
+                    var response = GroceryListResponse.From(creation.List);
                     return Results.Created($"/api/lists/{response.Id}", response);
                 })
             .RequireAuthorization();

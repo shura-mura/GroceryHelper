@@ -148,6 +148,68 @@ test('browser sessions keep independent list order and selection', async ({
   await secondContext.close();
 });
 
+test('duplicate creation can be revised after OK or Escape', async ({
+  page,
+  applicationUrl,
+}) => {
+  await signIn(page, applicationUrl);
+  await createList(page, 'Weekly groceries');
+  await page.getByRole('button', { name: 'Create a grocery list' }).click();
+  await page.getByLabel('List name').fill('weekly GROCERIES');
+  const createButton = page.getByRole('button', { name: 'Create', exact: true });
+
+  await createButton.click();
+
+  const dialog = page.getByRole('dialog', { name: 'Grocery list already exists' });
+  await expect(dialog).toContainText('Weekly groceries');
+  await expect(dialog.getByRole('button', { name: 'OK', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Navigate', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'OK', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Navigate', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'OK', exact: true })).toBeFocused();
+  await dialog.getByRole('button', { name: 'OK', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByLabel('List name')).toHaveValue('weekly GROCERIES');
+  await expect(createButton).toBeFocused();
+
+  await createButton.click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByLabel('List name')).toHaveValue('weekly GROCERIES');
+  await expect(createButton).toBeFocused();
+});
+
+test('duplicate creation can navigate to the existing list in the current order', async ({
+  page,
+  applicationUrl,
+}) => {
+  await signIn(page, applicationUrl);
+  await createList(page, 'Market');
+  await createList(page, 'Weekly groceries');
+  await page.getByLabel('List order').selectOption('descending');
+  await page.getByRole('button', { name: 'Create a grocery list' }).click();
+  await page.getByLabel('List name').fill('MARKET');
+  await page.getByRole('button', { name: 'Create', exact: true }).click();
+
+  await page.getByRole('dialog', { name: 'Grocery list already exists' })
+    .getByRole('button', { name: 'Navigate', exact: true })
+    .click();
+
+  const market = page.getByRole('list').getByRole('button', { name: 'Market' });
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect(page.getByLabel('List name')).not.toBeVisible();
+  await expect(market).toHaveAttribute('aria-current', 'true');
+  await expect(market).toBeInViewport();
+  await expect(market).toBeFocused();
+  await expect(page.getByRole('list').getByRole('button')).toHaveText([
+    'Weekly groceries',
+    'Market',
+  ]);
+});
+
 test('session loss discards a list draft and does not replay its create', async ({
   browser,
   applicationUrl,

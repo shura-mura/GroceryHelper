@@ -5,15 +5,24 @@ public sealed class GroceryListStore
     private readonly Lock sync = new();
     private readonly List<GroceryList> lists = [];
 
-    public GroceryList Create(GroceryListName name)
+    public GroceryListCreation Create(GroceryListName name)
     {
-        var list = new GroceryList(Guid.NewGuid(), name);
         lock (sync)
         {
-            lists.Add(list);
-        }
+            var existingList = lists.Find(
+                list => string.Equals(
+                    list.Name.Value,
+                    name.Value,
+                    StringComparison.OrdinalIgnoreCase));
+            if (existingList is not null)
+            {
+                return new GroceryListCreation(existingList, false);
+            }
 
-        return list;
+            var list = new GroceryList(Guid.NewGuid(), name);
+            lists.Add(list);
+            return new GroceryListCreation(list, true);
+        }
     }
 
     public IReadOnlyList<GroceryList> GetAll()
@@ -26,3 +35,5 @@ public sealed class GroceryListStore
 }
 
 public sealed record GroceryList(Guid Id, GroceryListName Name);
+
+public sealed record GroceryListCreation(GroceryList List, bool Created);
