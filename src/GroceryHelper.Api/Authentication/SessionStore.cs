@@ -2,7 +2,16 @@ using System.Security.Cryptography;
 
 namespace GroceryHelper.Api.Authentication;
 
-public sealed class SessionStore
+public interface ISessionStore
+{
+    CreatedSession Create(DateTimeOffset now);
+
+    bool IsValid(string? token, DateTimeOffset now);
+
+    void RevokeAll();
+}
+
+public sealed class SessionStore : ISessionStore
 {
     public static readonly TimeSpan Lifetime = TimeSpan.FromHours(8);
 

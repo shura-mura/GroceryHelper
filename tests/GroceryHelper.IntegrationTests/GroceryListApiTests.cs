@@ -156,6 +156,86 @@ public class GroceryListApiTests
             .IsEqualTo(1);
     }
 
+    [Test]
+    public async Task Duplicate_name_returns_validation_problem_with_existing_list_id()
+    {
+        // Arrange
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        using var login = await LoginAsync(client);
+        var csrfToken = await GetCsrfTokenAsync(client);
+        using var originalResponse = await CreateListAsync(client, csrfToken, "Weekly groceries");
+        var original = await originalResponse.Content.ReadFromJsonAsync<ListResponse>();
+
+        // Act
+        using var duplicateResponse = await CreateListAsync(
+            client,
+            csrfToken,
+            "  weekly\tGROCERIES  ");
+        var problem = await duplicateResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        // Assert
+        await Assert.That(login.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That(originalResponse.StatusCode).IsEqualTo(HttpStatusCode.Created);
+        await Assert.That(duplicateResponse.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(duplicateResponse.Content.Headers.ContentType?.MediaType)
+            .IsEqualTo("application/problem+json");
+        await Assert.That(problem.GetProperty("type").GetString())
+            .IsEqualTo("urn:grocery-helper:problem:validation-error");
+        await Assert.That(problem.GetProperty("errors").GetProperty("/name")[0].GetString())
+            .IsEqualTo("A grocery list named 'Weekly groceries' already exists.");
+        await Assert.That(problem.GetProperty("existingListId").GetString())
+            .IsEqualTo(original!.Id);
+        await Assert.That(problem.GetProperty("existingListName").GetString())
+            .IsEqualTo(original.Name);
+    }
+
+    [Test]
+    public async Task Concurrent_duplicate_creates_produce_exactly_one_list()
+    {
+        // Arrange
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        using var login = await LoginAsync(client);
+        var csrfToken = await GetCsrfTokenAsync(client);
+
+        // Act
+        var responses = await Task.WhenAll(
+            Enumerable.Range(0, 12)
+                .Select(index => CreateListAsync(
+                    client,
+                    csrfToken,
+                    index % 2 == 0 ? "Market" : "market")));
+        var responseBodies = await Task.WhenAll(
+            responses.Select(response => response.Content.ReadFromJsonAsync<JsonElement>()));
+        using var readResponse = await client.GetAsync("/api/lists");
+        var lists = await readResponse.Content.ReadFromJsonAsync<ListResponse[]>();
+
+        // Assert
+        await Assert.That(login.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That(responses.Count(response => response.StatusCode == HttpStatusCode.Created))
+            .IsEqualTo(1);
+        await Assert.That(responses.Count(response => response.StatusCode == HttpStatusCode.BadRequest))
+            .IsEqualTo(11);
+        await Assert.That(lists).Count().IsEqualTo(1);
+        var existingId = lists![0].Id;
+        var returnedIds = responses.Zip(responseBodies)
+            .Select(pair => pair.First.StatusCode == HttpStatusCode.Created
+                ? pair.Second.GetProperty("id").GetString()
+                : pair.Second.GetProperty("existingListId").GetString());
+        foreach (var returnedId in returnedIds)
+        {
+            await Assert.That(returnedId).IsEqualTo(existingId);
+        }
+
+        foreach (var response in responses)
+        {
+            response.Dispose();
+        }
+    }
+
     private static async Task<HttpResponseMessage> LoginAsync(HttpClient client)
     {
         var csrfToken = await GetCsrfTokenAsync(client);
