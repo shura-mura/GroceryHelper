@@ -9,6 +9,12 @@ async function signIn(page: Page, applicationUrl: string) {
   await expect(page.getByRole('heading', { name: 'Signed in as demo' })).toBeVisible();
 }
 
+async function createList(page: Page, name: string) {
+  await page.getByRole('button', { name: 'Create a grocery list' }).click();
+  await page.getByLabel('List name').fill(name);
+  await page.getByRole('button', { name: 'Create', exact: true }).click();
+}
+
 test('user creates and selects the first grocery list from the empty state', async ({
   page,
   applicationUrl,
@@ -41,6 +47,105 @@ test('user creates and selects the first grocery list from the empty state', asy
 
   await expect(page.getByRole('button', { name: 'Weekly groceries' }))
     .toHaveAttribute('aria-current', 'true');
+});
+
+test('user creates, selects, and moves between multiple grocery lists', async ({
+  page,
+  applicationUrl,
+}) => {
+  await signIn(page, applicationUrl);
+  await page.setViewportSize({ width: 1280, height: 320 });
+
+  await createList(page, 'Weekly groceries');
+  await createList(page, 'Market');
+
+  const weeklyList = page.getByRole('button', { name: 'Weekly groceries' });
+  const marketList = page.getByRole('button', { name: 'Market' });
+  await expect(marketList).toHaveAttribute('aria-current', 'true');
+  await expect(marketList).toBeInViewport();
+  await weeklyList.click();
+  await expect(weeklyList).toHaveAttribute('aria-current', 'true');
+  await expect(marketList).not.toHaveAttribute('aria-current', 'true');
+
+  for (let index = 1; index <= 15; index += 1) {
+    await createList(page, `List ${index}`);
+  }
+  await createList(page, 'A list');
+  const alphabeticallyFirstList = page.getByRole('button', { name: 'A list' });
+  await expect(alphabeticallyFirstList).toHaveAttribute('aria-current', 'true');
+  await expect(alphabeticallyFirstList).toBeInViewport();
+});
+
+test('user sorts lists naturally in either direction and the direction survives refresh', async ({
+  page,
+  applicationUrl,
+}) => {
+  await signIn(page, applicationUrl);
+  for (const name of ['Shop 10', 'Market', 'shop 2']) {
+    await createList(page, name);
+  }
+
+  const listButtons = page.getByRole('list').getByRole('button');
+  await expect(page.getByLabel('List order')).toHaveValue('ascending');
+  await expect(listButtons).toHaveText(['Market', 'shop 2', 'Shop 10']);
+  await expect(page.getByRole('button', { name: 'shop 2' }))
+    .toHaveAttribute('aria-current', 'true');
+
+  await page.getByLabel('List order').selectOption('descending');
+  await expect(listButtons).toHaveText(['Shop 10', 'shop 2', 'Market']);
+
+  await page.reload();
+
+  await expect(page.getByLabel('List order')).toHaveValue('descending');
+  await expect(listButtons).toHaveText(['Shop 10', 'shop 2', 'Market']);
+  await expect(page.getByRole('button', { name: 'Shop 10' }))
+    .toHaveAttribute('aria-current', 'true');
+});
+
+test('invalid saved list order safely falls back to A–Z', async ({
+  page,
+  applicationUrl,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('grocery-helper:list-order', 'sideways');
+  });
+  await signIn(page, applicationUrl);
+  await createList(page, 'Market');
+
+  await expect(page.getByLabel('List order')).toHaveValue('ascending');
+});
+
+test('browser sessions keep independent list order and selection', async ({
+  browser,
+  applicationUrl,
+}) => {
+  const firstContext = await browser.newContext();
+  const secondContext = await browser.newContext();
+  const firstPage = await firstContext.newPage();
+  const secondPage = await secondContext.newPage();
+  await signIn(firstPage, applicationUrl);
+  for (const name of ['Market', 'Shop 2', 'Shop 10']) {
+    await createList(firstPage, name);
+  }
+  await firstPage.getByRole('button', { name: 'Market' }).click();
+
+  await signIn(secondPage, applicationUrl);
+  await secondPage.getByLabel('List order').selectOption('descending');
+  await secondPage.getByRole('button', { name: 'Shop 2' }).click();
+
+  await expect(firstPage.getByLabel('List order')).toHaveValue('ascending');
+  await expect(firstPage.getByRole('list').getByRole('button'))
+    .toHaveText(['Market', 'Shop 2', 'Shop 10']);
+  await expect(firstPage.getByRole('button', { name: 'Market' }))
+    .toHaveAttribute('aria-current', 'true');
+  await expect(secondPage.getByLabel('List order')).toHaveValue('descending');
+  await expect(secondPage.getByRole('list').getByRole('button'))
+    .toHaveText(['Shop 10', 'Shop 2', 'Market']);
+  await expect(secondPage.getByRole('button', { name: 'Shop 2' }))
+    .toHaveAttribute('aria-current', 'true');
+
+  await firstContext.close();
+  await secondContext.close();
 });
 
 test('session loss discards a list draft and does not replay its create', async ({

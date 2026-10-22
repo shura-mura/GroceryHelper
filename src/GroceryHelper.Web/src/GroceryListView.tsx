@@ -11,9 +11,32 @@ interface GroceryListsProps {
   onSessionEnded: () => void;
 }
 
+type ListOrder = 'ascending' | 'descending';
+
+const listOrderStorageKey = 'grocery-helper:list-order';
+const listNameCollator = new Intl.Collator(undefined, {
+  sensitivity: 'base',
+  numeric: true,
+});
+
+function loadListOrder(): ListOrder {
+  return localStorage.getItem(listOrderStorageKey) === 'descending'
+    ? 'descending'
+    : 'ascending';
+}
+
+function orderLists(lists: GroceryList[], order: ListOrder) {
+  return [...lists].sort((left, right) => {
+    const comparison = listNameCollator.compare(left.name, right.name);
+    return order === 'ascending' ? comparison : -comparison;
+  });
+}
+
 export function GroceryListView({ onSessionEnded }: GroceryListsProps) {
   const [lists, setLists] = useState<GroceryList[]>();
   const [selectedListId, setSelectedListId] = useState<string>();
+  const [listOrder, setListOrder] = useState<ListOrder>(loadListOrder);
+  const initialListOrder = useRef(listOrder).current;
   const [creatingList, setCreatingList] = useState(false);
   const [listName, setListName] = useState('');
   const [error, setError] = useState<string>();
@@ -26,7 +49,7 @@ export function GroceryListView({ onSessionEnded }: GroceryListsProps) {
     void getGroceryLists(controller.signal)
       .then((loadedLists) => {
         setLists(loadedLists);
-        setSelectedListId(loadedLists[0]?.id);
+        setSelectedListId(orderLists(loadedLists, initialListOrder)[0]?.id);
       })
       .catch((caught: unknown) => {
         if (controller.signal.aborted) return;
@@ -35,7 +58,7 @@ export function GroceryListView({ onSessionEnded }: GroceryListsProps) {
       });
 
     return () => controller.abort();
-  }, [onSessionEnded]);
+  }, [initialListOrder, onSessionEnded]);
 
   useEffect(() => {
     selectedListElement.current?.scrollIntoView({ block: 'nearest' });
@@ -60,7 +83,7 @@ export function GroceryListView({ onSessionEnded }: GroceryListsProps) {
     setError(undefined);
     try {
       const created = await requestCreateGroceryList(listName);
-      setLists([created]);
+      setLists((existingLists) => [...(existingLists ?? []), created]);
       setSelectedListId(created.id);
       setCreatingList(false);
       setListName('');
@@ -77,14 +100,33 @@ export function GroceryListView({ onSessionEnded }: GroceryListsProps) {
     }
   }
 
+  function changeListOrder(order: ListOrder) {
+    localStorage.setItem(listOrderStorageKey, order);
+    setListOrder(order);
+  }
+
+  const orderedLists = lists ? orderLists(lists, listOrder) : undefined;
+
   return (
     <section aria-labelledby="grocery-lists-heading">
       <h2 id="grocery-lists-heading">Grocery lists</h2>
       {!lists && !error && <p>Loading grocery lists</p>}
       {lists?.length === 0 && <p>No grocery lists yet.</p>}
       {lists && lists.length > 0 && (
+        <label>
+          List order
+          <select
+            value={listOrder}
+            onChange={(event) => changeListOrder(event.target.value as ListOrder)}
+          >
+            <option value="ascending">A–Z</option>
+            <option value="descending">Z–A</option>
+          </select>
+        </label>
+      )}
+      {orderedLists && orderedLists.length > 0 && (
         <ul>
-          {lists.map((list) => {
+          {orderedLists.map((list) => {
             const selected = list.id === selectedListId;
             return (
               <li key={list.id}>
@@ -101,7 +143,7 @@ export function GroceryListView({ onSessionEnded }: GroceryListsProps) {
           })}
         </ul>
       )}
-      {lists?.length === 0 && !creatingList && (
+      {lists && !creatingList && (
         <button type="button" onClick={() => setCreatingList(true)}>
           Create a grocery list
         </button>

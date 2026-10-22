@@ -63,6 +63,34 @@ public class GroceryListApiTests
     }
 
     [Test]
+    public async Task Authenticated_account_creates_and_reads_multiple_lists()
+    {
+        // Arrange
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        using var login = await LoginAsync(client);
+        var csrfToken = await GetCsrfTokenAsync(client);
+
+        // Act
+        using var marketResponse = await CreateListAsync(client, csrfToken, "Market");
+        var market = await marketResponse.Content.ReadFromJsonAsync<ListResponse>();
+        using var weeklyResponse = await CreateListAsync(client, csrfToken, "Weekly groceries");
+        var weekly = await weeklyResponse.Content.ReadFromJsonAsync<ListResponse>();
+        using var readResponse = await client.GetAsync("/api/lists");
+        var lists = await readResponse.Content.ReadFromJsonAsync<ListResponse[]>();
+
+        // Assert
+        await Assert.That(login.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That(marketResponse.StatusCode).IsEqualTo(HttpStatusCode.Created);
+        await Assert.That(weeklyResponse.StatusCode).IsEqualTo(HttpStatusCode.Created);
+        await Assert.That(market).IsNotNull();
+        await Assert.That(weekly).IsNotNull();
+        await Assert.That(market!.Id).IsNotEqualTo(weekly!.Id);
+        await Assert.That(lists).IsEquivalentTo([market, weekly]);
+    }
+
+    [Test]
     public async Task Missing_or_invalid_csrf_proof_cannot_create_a_list()
     {
         // Arrange
@@ -138,6 +166,19 @@ public class GroceryListApiTests
                 username = "demo",
                 password = "GroceryDemo1!",
             }),
+        };
+        request.Headers.Add("X-CSRF-TOKEN", csrfToken);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> CreateListAsync(
+        HttpClient client,
+        string? csrfToken,
+        string name)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/lists")
+        {
+            Content = JsonContent.Create(new { name }),
         };
         request.Headers.Add("X-CSRF-TOKEN", csrfToken);
         return await client.SendAsync(request);
