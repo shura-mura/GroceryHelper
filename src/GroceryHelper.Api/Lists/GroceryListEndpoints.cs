@@ -58,6 +58,7 @@ internal static class GroceryListEndpoints
                             extensions: new Dictionary<string, object?>
                             {
                                 ["existingListId"] = creation.List.Id.ToString(),
+                                ["existingListName"] = creation.List.Name.Value,
                             });
                     }
 

@@ -187,6 +187,8 @@ public class GroceryListApiTests
             .IsEqualTo("A grocery list named 'Weekly groceries' already exists.");
         await Assert.That(problem.GetProperty("existingListId").GetString())
             .IsEqualTo(original!.Id);
+        await Assert.That(problem.GetProperty("existingListName").GetString())
+            .IsEqualTo(original.Name);
     }
 
     [Test]

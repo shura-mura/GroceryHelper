@@ -72,7 +72,7 @@ export function GroceryListView({ onSessionEnded }: GroceryListsProps) {
       selectedListElement.current?.focus();
       focusSelectedList.current = false;
     }
-  }, [selectedListId]);
+  }, [lists, selectedListId]);
 
   useEffect(() => {
     if (duplicate && !duplicateDialog.current?.open) {
@@ -159,10 +159,9 @@ export function GroceryListView({ onSessionEnded }: GroceryListsProps) {
       if (caught instanceof SessionEndedError) {
         onSessionEnded();
       } else if (caught instanceof DuplicateListError) {
-        const existingList = lists?.find((list) => list.id === caught.existingListId);
         setDuplicate({
           id: caught.existingListId,
-          name: existingList?.name ?? listName.trim().replace(/[ \t]+/g, ' '),
+          name: caught.existingListName ?? listName.trim().replace(/[ \t]+/g, ' '),
         });
       } else if (caught instanceof ListValidationError) {
         setError(caught.message);

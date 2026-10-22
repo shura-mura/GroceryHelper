@@ -8,6 +8,7 @@ export interface GroceryList {
 interface ValidationProblem {
   errors?: Record<string, string[]>;
   existingListId?: string;
+  existingListName?: string;
 }
 
 export class SessionEndedError extends Error {}
@@ -15,7 +16,11 @@ export class SessionEndedError extends Error {}
 export class ListValidationError extends Error {}
 
 export class DuplicateListError extends ListValidationError {
-  constructor(message: string, public readonly existingListId: string) {
+  constructor(
+    message: string,
+    public readonly existingListId: string,
+    public readonly existingListName?: string,
+  ) {
     super(message);
   }
 }
@@ -44,7 +49,11 @@ export async function createGroceryList(
     const problem = await response.json() as ValidationProblem;
     const message = problem.errors?.['/name']?.[0] ?? 'Unable to create the grocery list';
     if (problem.existingListId) {
-      throw new DuplicateListError(message, problem.existingListId);
+      throw new DuplicateListError(
+        message,
+        problem.existingListId,
+        problem.existingListName,
+      );
     }
     throw new ListValidationError(message);
   }
