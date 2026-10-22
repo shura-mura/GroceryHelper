@@ -6,7 +6,7 @@ internal static class GroceryListEndpoints
 {
     public static IServiceCollection AddGroceryLists(this IServiceCollection services)
     {
-        services.AddSingleton<GroceryListStore>();
+        services.AddSingleton<IGroceryListStore, GroceryListStore>();
         return services;
     }
 
@@ -14,7 +14,7 @@ internal static class GroceryListEndpoints
     {
         app.MapGet(
                 "/api/lists",
-                (GroceryListStore store) => Results.Ok(
+                (IGroceryListStore store) => Results.Ok(
                     store.GetAll().Select(GroceryListResponse.From)))
             .RequireAuthorization();
 
@@ -24,7 +24,7 @@ internal static class GroceryListEndpoints
                     HttpContext context,
                     CreateGroceryListRequest request,
                     IAntiforgery antiforgery,
-                    GroceryListStore store) =>
+                    IGroceryListStore store) =>
                 {
                     try
                     {

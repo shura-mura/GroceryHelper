@@ -1,6 +1,13 @@
 namespace GroceryHelper.Api.Lists;
 
-public sealed class GroceryListStore
+public interface IGroceryListStore
+{
+    GroceryListCreation Create(GroceryListName name);
+
+    IReadOnlyList<GroceryList> GetAll();
+}
+
+public sealed class GroceryListStore : IGroceryListStore
 {
     private readonly Lock sync = new();
     private readonly List<GroceryList> lists = [];

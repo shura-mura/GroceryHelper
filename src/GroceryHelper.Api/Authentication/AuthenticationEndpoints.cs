@@ -12,7 +12,7 @@ internal static class AuthenticationEndpoints
         this IServiceCollection services)
     {
         services.AddSingleton<DemoAccountAuthenticator>();
-        services.AddSingleton<SessionStore>();
+        services.AddSingleton<ISessionStore, SessionStore>();
         services.AddSingleton(TimeProvider.System);
         services.AddDataProtection().UseEphemeralDataProtectionProvider();
         services
@@ -47,7 +47,7 @@ internal static class AuthenticationEndpoints
                 LoginRequest request,
                 IAntiforgery antiforgery,
                 DemoAccountAuthenticator authenticator,
-                SessionStore sessions,
+                ISessionStore sessions,
                 TimeProvider timeProvider) =>
             {
                 try
@@ -93,7 +93,7 @@ internal static class AuthenticationEndpoints
             async (
                 HttpContext context,
                 IAntiforgery antiforgery,
-                SessionStore sessions) =>
+                ISessionStore sessions) =>
             {
                 try
                 {
