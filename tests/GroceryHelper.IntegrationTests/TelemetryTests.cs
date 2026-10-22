@@ -12,6 +12,7 @@ using OpenTelemetry.Trace;
 
 namespace GroceryHelper.IntegrationTests;
 
+[NotInParallel]
 public class TelemetryTests
 {
     [Test]
@@ -49,11 +50,15 @@ public class TelemetryTests
                 tag.Value?.Contains(secret) == true))
             .IsFalse();
 
-        var requestDuration = metrics.First(metric =>
-            metric.Name == "http.server.request.duration");
-        var routeTags = GetMetricTagValues(requestDuration, "http.route");
+        var requestDurations = metrics
+            .Where(metric => metric.Name == "http.server.request.duration")
+            .ToArray();
+        var routeTags = requestDurations
+            .SelectMany(metric => GetMetricTagValues(metric, "http.route"))
+            .ToArray();
         await Assert.That(routeTags).Contains("/health");
-        await Assert.That(ContainsMetricTagValue(requestDuration, secret))
+        await Assert.That(requestDurations.Any(metric =>
+                ContainsMetricTagValue(metric, secret)))
             .IsFalse();
     }
 
@@ -92,10 +97,11 @@ public class TelemetryTests
         await Assert.That(metricNames).Contains("dotnet.gc.collections");
         await Assert.That(metricNames).Contains("dotnet.thread_pool.thread.count");
 
-        var requestDuration = metrics.First(metric =>
-            metric.Name == "http.server.request.duration");
-        await Assert.That(GetMetricTagValues(requestDuration, "error.type"))
-            .Contains("500");
+        var errorTypes = metrics
+            .Where(metric => metric.Name == "http.server.request.duration")
+            .SelectMany(metric => GetMetricTagValues(metric, "error.type"))
+            .ToArray();
+        await Assert.That(errorTypes).Contains("500");
     }
 
     [Test]
